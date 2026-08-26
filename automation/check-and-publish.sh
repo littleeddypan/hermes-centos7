@@ -20,6 +20,32 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=../config/paths.conf
 source "$REPO_ROOT/config/paths.conf"
 
+export PATH="$HOME/.local/bin:$PATH"
+
+# 排程用的 cloud sandbox 不一定預裝 gh / uv，這裡裝到 $HOME/.local/bin，
+# 不需要 root。gh 的認證沿用環境既有的 GH_TOKEN / GITHUB_TOKEN（cloud agent
+# 環境通常已經有，讓它能 clone/push 這個 repo），不用另外 gh auth login。
+ensure_gh() {
+    command -v gh &> /dev/null && return
+    echo "→ gh 不存在，安裝到 \$HOME/.local/bin ..." >&2
+    local arch tmp
+    arch="$(uname -m)"; case "$arch" in aarch64) arch=arm64 ;; *) arch=amd64 ;; esac
+    tmp="$(mktemp -d)"
+    curl -fsSL "https://github.com/cli/cli/releases/download/v2.63.2/gh_2.63.2_linux_${arch}.tar.gz" -o "$tmp/gh.tar.gz"
+    tar xzf "$tmp/gh.tar.gz" -C "$tmp"
+    mkdir -p "$HOME/.local/bin"
+    cp "$tmp"/gh_*/bin/gh "$HOME/.local/bin/gh"
+}
+
+ensure_uv() {
+    command -v uv &> /dev/null && return
+    echo "→ uv 不存在，安裝到 \$HOME/.local/bin ..." >&2
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+}
+
+ensure_gh
+ensure_uv
+
 echo "→ 查詢 PyPI 上 hermes-agent 最新版本..."
 LATEST_VERSION="$(curl -fsSL https://pypi.org/pypi/hermes-agent/json | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])')"
 echo "  PyPI 最新版本:     $LATEST_VERSION"
