@@ -152,6 +152,30 @@ bash /mnt/shared/hermes-agent/client/hermes-agent-setup.sh
 
 ---
 
+## GitHub Release 與每日自動更新
+
+這個 repo 本身是公開的，每個版本的離線安裝包都發佈在
+[Releases](../../releases)（GitHub 單一檔案有 100MB 限制，安裝包直接
+`git commit` 會超過，所以用 Release 附件發佈，不進 git 樹）。每個 Release
+附三個檔案：
+
+- `hermes-agent-offline-<版本>.tar.gz` — 完整離線安裝包
+- `hermes-agent-offline-<版本>.tar.gz.sha256` — 校驗碼
+- `python.tar.gz` — 單獨附一份，讓下面的自動化不用每次都重新編譯
+
+[automation/check-and-publish.sh](automation/check-and-publish.sh) 由排程的
+cloud agent 每天執行一次：查詢 PyPI 上 hermes-agent 的最新版本，如果比
+`config/paths.conf` 記錄的版本新，就沿用「目前最新 Release」裡已經編譯好的
+`python.tar.gz`（**不需要 Docker、不需要重新編譯 Python/OpenSSL**——這兩個
+版本平常不會變），只重新解析、下載 hermes-agent 新版的相依套件，打包成新的
+Release，並把 `config/paths.conf` 的版本號 commit 回 repo。
+
+如果哪天真的要換 Python 或 OpenSSL 版本，那一次需要手動在有 Docker 的機器上
+跑 `build/build-offline-bundle.sh`，把新的 `python.tar.gz` 發到新 Release 裡，
+之後 `check-and-publish.sh` 會自動接續沿用新的那份。
+
+---
+
 ## 已知限制與風險
 
 - **glibc 相容性**：整個方案的前提是「在 centos:7 容器內編譯」保證 ABI 對齊。

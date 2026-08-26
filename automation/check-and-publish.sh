@@ -1,0 +1,94 @@
+#!/bin/bash
+# ============================================================================
+# 每日自動檢查 hermes-agent 是否有新版本，有的話重新打包並發佈新的 GitHub Release
+# ============================================================================
+# 設計給排程用的 cloud agent（或任何一次性、乾淨 checkout 的環境）執行，
+# 需要：git、gh（已認證且對這個 repo 有寫入權限）、curl、python3、uv。
+#
+# 特意不需要 Docker：build/build-python-centos7.sh 編出來的 Python + OpenSSL
+# 只跟 config/paths.conf 裡的 PYTHON_VERSION / OPENSSL_VERSION / 共用目錄路徑
+# 有關，這些平常不會變 —— 所以直接沿用「目前最新 Release」裡已經編譯好的
+# python.tar.gz，每天只需要重新解析、下載 hermes-agent 新版本的相依套件。
+#
+# 如果哪天真的要換 Python 或 OpenSSL 版本，那一次需要手動在有 Docker 的機器上
+# 跑 build/build-offline-bundle.sh，把新的 python.tar.gz 發到新 release 裡，
+# 之後這支腳本會自動接續沿用新的那份。
+# ============================================================================
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=../config/paths.conf
+source "$REPO_ROOT/config/paths.conf"
+
+echo "→ 查詢 PyPI 上 hermes-agent 最新版本..."
+LATEST_VERSION="$(curl -fsSL https://pypi.org/pypi/hermes-agent/json | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])')"
+echo "  PyPI 最新版本:     $LATEST_VERSION"
+echo "  repo 目前記錄版本: $HERMES_AGENT_VERSION"
+
+if [ "$LATEST_VERSION" = "$HERMES_AGENT_VERSION" ]; then
+    echo "✓ 已經是最新版本，不需要動作。"
+    exit 0
+fi
+
+echo "→ 發現新版本 $LATEST_VERSION，開始重新打包（沿用既有 Python/OpenSSL，不需要 Docker）..."
+
+CURRENT_TAG="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
+echo "  沿用 $CURRENT_TAG 裡已經編譯好的 python.tar.gz"
+
+WORK_DIR="$(mktemp -d)"
+gh release download "$CURRENT_TAG" -p "python.tar.gz" -D "$WORK_DIR" --clobber
+
+NEW_NAME="hermes-agent-offline-$LATEST_VERSION"
+BUNDLE_DIR="$WORK_DIR/$NEW_NAME"
+mkdir -p "$BUNDLE_DIR"/{wheels,client,config}
+cp "$WORK_DIR/python.tar.gz" "$BUNDLE_DIR/python.tar.gz"
+cp "$REPO_ROOT/client/"*.sh "$BUNDLE_DIR/client/"
+cp "$REPO_ROOT/config/paths.conf" "$BUNDLE_DIR/config/paths.conf"
+
+echo "→ 用 uv 解析 hermes-agent[$HERMES_AGENT_EXTRAS]==$LATEST_VERSION 的完整相依清單..."
+echo "hermes-agent[${HERMES_AGENT_EXTRAS}]==${LATEST_VERSION}" > "$WORK_DIR/requirements.in"
+uv pip compile "$WORK_DIR/requirements.in" \
+    --python-platform x86_64-manylinux2014 \
+    --python-version "3.11" \
+    --no-header \
+    -o "$WORK_DIR/requirements-resolved.txt"
+
+# --no-deps 的原因見 build/build-offline-bundle.sh 裡的說明：requirements.txt
+# 已經是 uv 針對 linux 目標解析好、攤平的完整相依清單，pip 只管照單抓檔案，
+# 不要再自己 walk 一次相依（否則會誤判 marker，抓到用不到的平台專屬套件）。
+PY_VERSION_DIGITS="${TARGET_PYTHON_TAG#cp}"
+python3 -m pip download \
+    -r "$WORK_DIR/requirements-resolved.txt" \
+    --no-deps \
+    --dest "$BUNDLE_DIR/wheels" \
+    --platform "$TARGET_PLATFORM" \
+    --python-version "$PY_VERSION_DIGITS" \
+    --abi "$TARGET_ABI_TAG" \
+    --implementation cp \
+    --only-binary=:all:
+
+WHEEL_COUNT=$(find "$BUNDLE_DIR/wheels" -type f | wc -l)
+echo "  ✓ 取得 $WHEEL_COUNT 個套件檔"
+
+echo "$LATEST_VERSION" > "$BUNDLE_DIR/VERSION"
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$BUNDLE_DIR/BUILD_TIME"
+
+( cd "$WORK_DIR" && tar czf "$NEW_NAME.tar.gz" "$NEW_NAME" )
+( cd "$WORK_DIR" && sha256sum "$NEW_NAME.tar.gz" > "$NEW_NAME.tar.gz.sha256" )
+
+echo "→ 更新 config/paths.conf 的版本號並 commit..."
+sed -i "s/^HERMES_AGENT_VERSION=.*/HERMES_AGENT_VERSION=\"$LATEST_VERSION\"/" "$REPO_ROOT/config/paths.conf"
+cd "$REPO_ROOT"
+git add config/paths.conf
+git commit -m "chore: bump hermes-agent to $LATEST_VERSION"
+git push
+
+echo "→ 發佈 GitHub Release v$LATEST_VERSION..."
+gh release create "v$LATEST_VERSION" \
+    "$WORK_DIR/$NEW_NAME.tar.gz" \
+    "$WORK_DIR/$NEW_NAME.tar.gz.sha256" \
+    "$WORK_DIR/python.tar.gz" \
+    --title "hermes-agent $LATEST_VERSION (CentOS 7 offline installer)" \
+    --notes "自動偵測到 hermes-agent 新版本 $LATEST_VERSION，重新打包（沿用既有的 Python $PYTHON_VERSION + OpenSSL $OPENSSL_VERSION，未重新編譯）。"
+
+echo "✓ 完成：v$LATEST_VERSION 已發佈"
