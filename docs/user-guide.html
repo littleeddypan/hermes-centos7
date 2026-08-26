@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>Hermes Agent 安裝與更新手冊</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@500;600;700&family=Red+Hat+Text:wght@400;500;600&family=Red+Hat+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ============================== TOKENS ============================== */
+  :root {
+    --surface: #EEF0F2;
+    --surface-raised: #FFFFFF;
+    --ink: #1D232B;
+    --ink-soft: #4B5563;
+    --ink-faint: #7A8390;
+    --accent: #BD6B1B;
+    --accent-ink: #ffffff;
+    --accent-soft: #F3E2CE;
+    --line: #D9DCE1;
+    --line-strong: #C3C8CF;
+    --code-bg: #1D232B;
+    --code-ink: #E7E4DC;
+    --code-line: #333B46;
+    --code-prompt: #E0913F;
+    --ok: #2F7A55;
+    --ok-soft: #E1F0E7;
+    --shadow: 0 1px 2px rgba(29,35,43,0.06), 0 8px 24px -12px rgba(29,35,43,0.18);
+
+    --font-display: "Red Hat Display", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", "Heiti TC", sans-serif;
+    --font-body: "Red Hat Text", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", "Heiti TC", sans-serif;
+    --font-mono: "Red Hat Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+    --measure: 66ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface: #14171B;
+      --surface-raised: #1B1F25;
+      --ink: #E7E4DC;
+      --ink-soft: #9BA3AE;
+      --ink-faint: #6B7480;
+      --accent: #E0913F;
+      --accent-ink: #1D1204;
+      --accent-soft: rgba(224,145,63,0.16);
+      --line: #2A2F36;
+      --line-strong: #3A4149;
+      --code-bg: #0D0F12;
+      --code-ink: #E7E4DC;
+      --code-line: #262C33;
+      --code-prompt: #E0913F;
+      --ok: #4FAE7C;
+      --ok-soft: rgba(79,174,124,0.14);
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 28px -12px rgba(0,0,0,0.5);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --surface: #14171B;
+    --surface-raised: #1B1F25;
+    --ink: #E7E4DC;
+    --ink-soft: #9BA3AE;
+    --ink-faint: #6B7480;
+    --accent: #E0913F;
+    --accent-ink: #1D1204;
+    --accent-soft: rgba(224,145,63,0.16);
+    --line: #2A2F36;
+    --line-strong: #3A4149;
+    --code-bg: #0D0F12;
+    --code-ink: #E7E4DC;
+    --code-line: #262C33;
+    --code-prompt: #E0913F;
+    --ok: #4FAE7C;
+    --ok-soft: rgba(79,174,124,0.14);
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 28px -12px rgba(0,0,0,0.5);
+  }
+
+  /* ============================== RESET / BASE ============================== */
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+  p { margin: 0 0 1em; max-width: var(--measure); }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+  ::selection { background: var(--accent-soft); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .step { transition: opacity .4s ease, transform .4s ease; }
+  }
+
+  /* ============================== PAGE SHELL ============================== */
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 clamp(20px, 4vw, 56px);
+  }
+
+  /* ---- Hero ---- */
+  .hero {
+    padding: clamp(48px, 8vw, 88px) 0 clamp(32px, 5vw, 56px);
+    border-bottom: 1px solid var(--line);
+  }
+  .hero__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: .55em;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: .4em .8em;
+    border-radius: 4px;
+    margin-bottom: 22px;
+  }
+  .hero__eyebrow::before { content: "⚕"; font-size: 1.2em; }
+  .hero h1 {
+    font-size: clamp(32px, 5vw, 50px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.08;
+    color: var(--ink);
+  }
+  .hero h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .hero__lede {
+    margin-top: 20px;
+    font-size: clamp(17px, 1.9vw, 19px);
+    color: var(--ink-soft);
+    max-width: 54ch;
+  }
+  .hero__meta {
+    margin-top: 32px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--ink-faint);
+  }
+  .hero__meta b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ---- Body grid: rail + content ---- */
+  .body-grid {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: clamp(24px, 4vw, 64px);
+    padding: clamp(32px, 6vw, 56px) 0 96px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .body-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ---- Rail ---- */
+  .rail {
+    position: sticky;
+    top: clamp(16px, 3vw, 32px);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  @media (max-width: 860px) {
+    .rail {
+      position: static;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 8px;
+    }
+  }
+  .rail a {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: var(--ink-soft);
+    font-size: 14px;
+    border-left: 2px solid transparent;
+  }
+  .rail a:hover { background: var(--surface-raised); color: var(--ink); }
+  .rail a .num {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+    min-width: 1.6em;
+  }
+  @media (max-width: 860px) {
+    .rail a { border-left: none; border-radius: 999px; background: var(--surface-raised); border: 1px solid var(--line); padding: 6px 12px; }
+  }
+
+  /* ---- Content column ---- */
+  .content { min-width: 0; }
+
+  .step {
+    padding: 40px 0;
+    border-bottom: 1px solid var(--line);
+    scroll-margin-top: 20px;
+  }
+  .step:last-child { border-bottom: none; }
+
+  .step__head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+  .step__num {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 5px;
+    padding: 3px 9px;
+    letter-spacing: .02em;
+  }
+  .step h2 {
+    font-size: clamp(21px, 2.4vw, 26px);
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .step > p, .step > ul, .step > ol { max-width: var(--measure); }
+  .step__intro { color: var(--ink-soft); }
+
+  ul.checklist { list-style: none; padding: 0; margin: 0 0 1em; display: grid; gap: 10px; max-width: var(--measure); }
+  ul.checklist li { display: flex; gap: 10px; color: var(--ink-soft); }
+  ul.checklist li::before {
+    content: "✓";
+    color: var(--ok);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* ---- Terminal window ---- */
+  .term {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    margin: 22px 0;
+    max-width: 720px;
+  }
+  .term__bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--code-line);
+  }
+  .term__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--code-line); }
+  .term__path {
+    margin-left: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: #838C97;
+  }
+  .term__body {
+    padding: 16px 18px 18px;
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .term__body .prompt { color: var(--code-prompt); }
+  .term__body .dim { color: #7d8794; }
+  .term__body .ok { color: #7fd9a6; }
+  .term__body .cmd { color: var(--code-ink); }
+
+  /* ---- Callouts (styled as CLI log lines) ---- */
+  .note {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    background: var(--surface-raised);
+    border: 1px solid var(--line);
+    max-width: var(--measure);
+    margin: 20px 0;
+  }
+  .note__tag {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: .04em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    height: fit-content;
+    white-space: nowrap;
+  }
+  .note--info .note__tag { color: var(--accent); background: var(--accent-soft); }
+  .note--ok .note__tag { color: var(--ok); background: var(--ok-soft); }
+  .note p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+  .note strong { color: var(--ink); }
+
+  /* ---- Command table ---- */
+  .cmdtable {
+    max-width: 720px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--surface-raised);
+    margin: 8px 0 4px;
+  }
+  .cmdrow {
+    display: grid;
+    grid-template-columns: minmax(140px, 210px) 1fr;
+    gap: 16px;
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--line);
+    align-items: center;
+  }
+  .cmdrow:last-child { border-bottom: none; }
+  .cmdrow code {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 3px 8px;
+    border-radius: 5px;
+    white-space: nowrap;
+    width: fit-content;
+  }
+  .cmdrow span { color: var(--ink-soft); font-size: 14.5px; }
+  @media (max-width: 560px) {
+    .cmdrow { grid-template-columns: 1fr; }
+  }
+
+  /* ---- Update flow diagram ---- */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin: 26px 0 30px;
+    max-width: 720px;
+  }
+  .flow__card {
+    flex: 1 1 200px;
+    border: 1px solid var(--line);
+    background: var(--surface-raised);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .flow__card--current {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .flow__label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  .flow__ver { font-family: var(--font-mono); font-size: 18px; color: var(--ink); }
+  .flow__card--current .flow__ver { color: var(--accent); }
+  .flow__arrow {
+    flex: 0 0 auto;
+    color: var(--ink-faint);
+    font-size: 22px;
+    padding: 0 6px;
+  }
+  .flow__you {
+    flex: 1 1 100%;
+    text-align: center;
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+
+  /* ---- Footer ---- */
+  .foot {
+    border-top: 1px solid var(--line);
+    padding: 28px 0 48px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="hero">
+    <span class="hero__eyebrow">內部工具安裝手冊</span>
+    <h1>Hermes Agent<br><em>安裝與更新</em>指南</h1>
+    <p class="hero__lede">
+      你的個人 AI 助理，跑在公司內部、不需要對外連網。安裝一次之後留在你自己的帳號下，
+      版本更新由管理員統一發佈——你不需要重灌，也不需要自己跑更新指令。
+    </p>
+    <div class="hero__meta">
+      <span><b>執行環境</b>&nbsp;共用唯讀安裝，不需要 root</span>
+      <span><b>個人資料</b>&nbsp;留在你自己的 <code>~/.hermes</code></span>
+      <span><b>網路需求</b>&nbsp;完全離線安裝</span>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="rail" aria-label="章節">
+      <a href="#what"><span class="num">01</span> 這是什麼</a>
+      <a href="#install"><span class="num">02</span> 安裝</a>
+      <a href="#setup"><span class="num">03</span> 第一次設定</a>
+      <a href="#daily"><span class="num">04</span> 日常使用</a>
+      <a href="#update"><span class="num">05</span> 版本更新</a>
+      <a href="#trouble"><span class="num">06</span> 疑難排解</a>
+    </nav>
+
+    <main class="content">
+
+      <section class="step" id="what">
+        <div class="step__head">
+          <span class="step__num">01</span>
+          <h2>這是什麼</h2>
+        </div>
+        <p class="step__intro">
+          Hermes Agent 是一個在終端機裡跟你對話、可以幫你執行任務的 AI agent。
+          公司把它裝在內部共用位置，你只要在自己的帳號下跑一次安裝腳本，
+          之後打 <code>hermes</code> 就能開始使用——設定檔、對話紀錄、API 金鑰
+          全部留在你自己的家目錄，不會跟其他同仁互相影響。
+        </p>
+        <ul class="checklist">
+          <li>不需要 root / sudo 權限</li>
+          <li>不需要對外網路，安裝與更新都在公司內網完成</li>
+          <li>個人資料（API 金鑰、對話紀錄、技能）只存在你自己的帳號下</li>
+        </ul>
+      </section>
+
+      <section class="step" id="install">
+        <div class="step__head">
+          <span class="step__num">02</span>
+          <h2>安裝：一行指令</h2>
+        </div>
+        <p class="step__intro">
+          找系統管理員拿到共用目錄的實際路徑（下面以 <code>/mnt/shared/hermes-agent</code>
+          為例），在你自己的帳號下執行：
+        </p>
+
+        <div class="term">
+          <div class="term__bar">
+            <span class="term__dot"></span><span class="term__dot"></span><span class="term__dot"></span>
+            <span class="term__path">your-account@centos7</span>
+          </div>
+          <div class="term__body"><span class="prompt">$</span> <span class="cmd">bash /mnt/shared/hermes-agent/client/hermes-agent-setup.sh</span>
+
+⚕ hermes-agent 個人安裝
+  共用執行環境: /mnt/shared/hermes-agent
+
+<span class="ok">✓</span> 目前共用版本: 0.15.1
+<span class="ok">✓</span> 已建立 ~/.local/bin/hermes
+<span class="ok">✓</span> 已將 ~/.local/bin 加入 PATH
+<span class="ok">✓</span> 個人設定目錄: ~/.hermes
+
+<span class="ok">✓ 安裝完成！</span>
+
+<span class="dim">要現在執行設定精靈 (hermes setup) 嗎？ [Y/n]</span></div>
+        </div>
+
+        <div class="note note--info">
+          <span class="note__tag">NOTE</span>
+          <p>
+            腳本只會動到你自己的帳號：建立 <code>~/.local/bin/hermes</code> 這個指令，
+            以及 <code>~/.hermes</code> 這個個人設定目錄。共用目錄本身是唯讀的，
+            你不會、也不需要去動到它。
+          </p>
+        </div>
+
+        <p>
+          裝完之後重新載入 shell 設定（或重新登入一次），指令就能直接使用：
+        </p>
+        <div class="term" style="max-width:420px">
+          <div class="term__bar">
+            <span class="term__dot"></span><span class="term__dot"></span><span class="term__dot"></span>
+          </div>
+          <div class="term__body"><span class="prompt">$</span> <span class="cmd">source ~/.bashrc</span></div>
+        </div>
+      </section>
+
+      <section class="step" id="setup">
+        <div class="step__head">
+          <span class="step__num">03</span>
+          <h2>第一次設定</h2>
+        </div>
+        <p class="step__intro">
+          安裝腳本最後會問你要不要直接跑設定精靈；如果當下跳過了，之後隨時可以自己執行：
+        </p>
+        <div class="term" style="max-width:360px">
+          <div class="term__bar"><span class="term__dot"></span><span class="term__dot"></span><span class="term__dot"></span></div>
+          <div class="term__body"><span class="prompt">$</span> <span class="cmd">hermes setup</span></div>
+        </div>
+        <p>
+          設定精靈會引導你填入 API 金鑰、選擇預設模型等個人設定。這些內容只會寫進
+          <code>~/.hermes/config.yaml</code> 和 <code>~/.hermes/.env</code>，只有你自己看得到。
+        </p>
+      </section>
+
+      <section class="step" id="daily">
+        <div class="step__head">
+          <span class="step__num">04</span>
+          <h2>日常使用</h2>
+        </div>
+        <p class="step__intro">常用指令：</p>
+        <div class="cmdtable">
+          <div class="cmdrow"><code>hermes</code><span>開始跟 Hermes 對話</span></div>
+          <div class="cmdrow"><code>hermes setup</code><span>重新設定 API 金鑰、預設模型</span></div>
+          <div class="cmdrow"><code>hermes status</code><span>查看目前的設定狀態</span></div>
+          <div class="cmdrow"><code>hermes doctor</code><span>健康檢查，診斷安裝或設定問題</span></div>
+          <div class="cmdrow"><code>hermes --help</code><span>列出所有可用指令</span></div>
+        </div>
+      </section>
+
+      <section class="step" id="update">
+        <div class="step__head">
+          <span class="step__num">05</span>
+          <h2>版本更新怎麼運作</h2>
+        </div>
+        <p class="step__intro">
+          <strong>你不需要做任何事。</strong>Hermes Agent 的執行環境是共用的，
+          管理員發佈新版時只是把「目前版本」指到新的位置，
+          你下一次執行 <code>hermes</code> 指令，就自動是新版本。
+        </p>
+
+        <div class="flow">
+          <div class="flow__card">
+            <div class="flow__label">舊版本</div>
+            <div class="flow__ver">0.15.0</div>
+          </div>
+          <span class="flow__arrow">→</span>
+          <div class="flow__card flow__card--current">
+            <div class="flow__label">管理員發佈後・目前版本</div>
+            <div class="flow__ver">0.15.1</div>
+          </div>
+          <div class="flow__you">你這邊什麼都不用做，下次打 <code>hermes</code> 就是新版本</div>
+        </div>
+
+        <div class="note note--ok">
+          <span class="note__tag">好處</span>
+          <p>
+            如果你更新當下正好在跟 Hermes 對話，也不會被中斷——正在跑的對話
+            會繼續用它啟動當下的版本，跑完之後下次啟動才會換新版。
+          </p>
+        </div>
+
+        <p>想確認自己目前用的是哪個版本，兩種方式都可以：</p>
+        <div class="term" style="max-width:420px">
+          <div class="term__bar"><span class="term__dot"></span><span class="term__dot"></span><span class="term__dot"></span></div>
+          <div class="term__body"><span class="prompt">$</span> <span class="cmd">hermes --version</span>
+<span class="dim">Hermes Agent v0.15.1</span></div>
+        </div>
+      </section>
+
+      <section class="step" id="trouble">
+        <div class="step__head">
+          <span class="step__num">06</span>
+          <h2>疑難排解</h2>
+        </div>
+
+        <div class="cmdtable" style="margin-bottom:22px;">
+          <div class="cmdrow"><code>command not found</code><span>重新登入，或執行 <code>source ~/.bashrc</code></span></div>
+          <div class="cmdrow"><code>hermes doctor</code> 有 ✗<span>照畫面上的說明處理；解不掉再找管理員</span></div>
+          <div class="cmdrow">忘記填 API 金鑰<span>重新執行 <code>hermes setup</code></span></div>
+        </div>
+
+        <p class="step__intro">如果要移除自己安裝的部分：</p>
+        <div class="term">
+          <div class="term__bar"><span class="term__dot"></span><span class="term__dot"></span><span class="term__dot"></span></div>
+          <div class="term__body"><span class="prompt">$</span> <span class="cmd">bash /mnt/shared/hermes-agent/client/hermes-agent-uninstall.sh</span>
+<span class="ok">✓</span> 已移除 ~/.local/bin/hermes
+<span class="dim">! 個人設定目錄 ~/.hermes 未刪除（保留 API 金鑰與對話紀錄）</span>
+
+<span class="dim">$ 加上 --purge 才會連個人資料一起永久刪除：</span>
+<span class="prompt">$</span> <span class="cmd">bash /mnt/shared/hermes-agent/client/hermes-agent-uninstall.sh --purge</span></div>
+        </div>
+
+        <div class="note note--info">
+          <span class="note__tag">聯絡窗口</span>
+          <p>
+            共用環境本身是管理員維護的，任何跟安裝路徑、權限、發佈版本有關的問題，
+            請直接找系統管理員協助。
+          </p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="foot">
+    <span>Hermes Agent · 內部安裝手冊</span>
+    <span>共用路徑以 /mnt/shared/hermes-agent 為例，實際路徑請向管理員確認</span>
+  </footer>
+
+</div>
+
+</body>
+</html>

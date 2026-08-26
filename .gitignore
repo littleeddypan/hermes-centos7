@@ -1,0 +1,9 @@
+# 本機建置暫存/快取，體積大且可重現，不進版控
+build/work-*/
+build/*.log
+
+# 產出的安裝包一律透過 GitHub Release 發佈，不直接 commit 進 git 樹
+dist/
+
+# 其他工具留下的狀態檔
+.omc/
