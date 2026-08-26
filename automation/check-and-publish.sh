@@ -58,7 +58,11 @@ fi
 
 echo "→ 發現新版本 $LATEST_VERSION，開始重新打包（沿用既有 Python/OpenSSL，不需要 Docker）..."
 
-CURRENT_TAG="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
+# 部分排程用的 sandbox 只允許 gh 的 REST 呼叫（`gh api repos/{owner}/{repo}/...`），
+# `gh release list --json ...` 這種高階指令的 --json/--jq 輸出機制會走 GraphQL，
+# 在那類環境會被 403 擋掉，所以這裡改用 `gh api` 直接打 REST 端點取得最新 tag。
+REPO_SLUG="$(git -C "$REPO_ROOT" remote get-url origin | sed -E 's#^(https://github\.com/|git@github\.com:)##; s#\.git$##')"
+CURRENT_TAG="$(gh api "repos/$REPO_SLUG/releases/latest" --jq '.tag_name')"
 echo "  沿用 $CURRENT_TAG 裡已經編譯好的 python.tar.gz"
 
 WORK_DIR="$(mktemp -d)"
