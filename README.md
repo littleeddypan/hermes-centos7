@@ -74,8 +74,13 @@ cd build
 ```
 
 會依序做：
-1. **編譯 Python**：在 `centos:7` 容器內從原始碼編譯 Python 3.11，`--prefix` 直接設成
-   `<共用目錄>/releases/<版本>/python` 這個最終絕對路徑。
+1. **編譯 Python（含自編 OpenSSL、SQLite）**：在 `centos:7` 容器內從原始碼編譯，
+   `--prefix` 直接設成 `<共用目錄>/releases/<版本>/python` 這個最終絕對路徑。
+   OpenSSL 跟 SQLite 也一起自己編（都裝在同一個路徑下）：CentOS 7 系統內建的
+   OpenSSL 1.0.2k 太舊，Python 3.10+ 的 `_ssl` 模組建不起來；系統內建的 SQLite
+   3.7.17 太舊，不支援 hermes-agent session 資料庫用到的 partial index / UPSERT /
+   遞迴 CTE，會在 `/sessions` 等指令噴 `OperationalError: near "WHERE": syntax error`。
+   詳細原因見 [build/build-python-centos7.sh](build/build-python-centos7.sh) 開頭的說明。
 2. **下載套件**：`pip download "hermes-agent[all]==<版本>"`，用
    `--platform manylinux2014_x86_64 --python-version 311` 抓 CentOS 7 相容的 wheel，
    不需要在本機執行安裝，所以建置機甚至不必是 Linux。
@@ -166,11 +171,11 @@ bash /mnt/shared/hermes-agent/client/hermes-agent-setup.sh
 [automation/check-and-publish.sh](automation/check-and-publish.sh) 由排程的
 cloud agent 每天執行一次：查詢 PyPI 上 hermes-agent 的最新版本，如果比
 `config/paths.conf` 記錄的版本新，就沿用「目前最新 Release」裡已經編譯好的
-`python.tar.gz`（**不需要 Docker、不需要重新編譯 Python/OpenSSL**——這兩個
+`python.tar.gz`（**不需要 Docker、不需要重新編譯 Python/OpenSSL/SQLite**——這幾個
 版本平常不會變），只重新解析、下載 hermes-agent 新版的相依套件，打包成新的
 Release，並把 `config/paths.conf` 的版本號 commit 回 repo。
 
-如果哪天真的要換 Python 或 OpenSSL 版本，那一次需要手動在有 Docker 的機器上
+如果哪天真的要換 Python、OpenSSL 或 SQLite 版本，那一次需要手動在有 Docker 的機器上
 跑 `build/build-offline-bundle.sh`，把新的 `python.tar.gz` 發到新 Release 裡，
 之後 `check-and-publish.sh` 會自動接續沿用新的那份。
 
