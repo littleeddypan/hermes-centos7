@@ -36,7 +36,7 @@ echo "════════════════════════�
 echo " hermes-agent 離線安裝包建置"
 echo "   版本:       $VERSION"
 echo "   目標平台:   $TARGET_PLATFORM / $TARGET_PYTHON_TAG"
-echo "   Python:     $PYTHON_VERSION (OpenSSL $OPENSSL_VERSION)"
+echo "   Python:     $PYTHON_VERSION (OpenSSL $OPENSSL_VERSION, SQLite $SQLITE_VERSION)"
 echo "   共用目錄:   $HERMES_SHARE_ROOT"
 echo "   功能範圍:   [$HERMES_AGENT_EXTRAS]"
 echo "════════════════════════════════════════════════════════════"
@@ -47,13 +47,13 @@ echo "════════════════════════�
 echo ""
 PY_TARBALL="$PY_OUT_DIR/python.tar.gz"
 PY_CACHE_MARKER="$PY_OUT_DIR/.build-marker"
-PY_CACHE_KEY="$PYTHON_VERSION|$OPENSSL_VERSION|$FINAL_PY_PREFIX"
+PY_CACHE_KEY="$PYTHON_VERSION|$OPENSSL_VERSION|$SQLITE_VERSION|$SQLITE_YEAR|$FINAL_PY_PREFIX"
 
 if [ -f "$PY_TARBALL" ] && [ "$(cat "$PY_CACHE_MARKER" 2>/dev/null || true)" = "$PY_CACHE_KEY" ]; then
-    echo "[1/3] Python/OpenSSL 版本與共用目錄路徑都沒變，沿用先前編譯好的 $PY_TARBALL"
+    echo "[1/3] Python/OpenSSL/SQLite 版本與共用目錄路徑都沒變，沿用先前編譯好的 $PY_TARBALL"
 else
-    echo "[1/3] 編譯 CentOS 7 專用 OpenSSL ${OPENSSL_VERSION} + Python ${PYTHON_VERSION} ..."
-    "$SCRIPT_DIR/build-python-centos7.sh" "$PY_OUT_DIR" "$PYTHON_VERSION" "$FINAL_PY_PREFIX" "$OPENSSL_VERSION"
+    echo "[1/3] 編譯 CentOS 7 專用 OpenSSL ${OPENSSL_VERSION} + SQLite ${SQLITE_VERSION} + Python ${PYTHON_VERSION} ..."
+    "$SCRIPT_DIR/build-python-centos7.sh" "$PY_OUT_DIR" "$PYTHON_VERSION" "$FINAL_PY_PREFIX" "$OPENSSL_VERSION" "$SQLITE_VERSION" "$SQLITE_YEAR"
     echo "$PY_CACHE_KEY" > "$PY_CACHE_MARKER"
 fi
 

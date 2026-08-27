@@ -20,23 +20,40 @@
 #   解法：先在同一個最終路徑下編一份新版 OpenSSL，Python 的 configure
 #   用 --with-openssl 指過去即可，兩者共用同一組 rpath。
 #
+# 為什麼要自己編 SQLite？
+#   CentOS 7 系統內建的 sqlite-devel 是 3.7.17（2013 年）。hermes-agent 的
+#   session 資料庫（hermes_state.py）大量使用 partial index（CREATE INDEX
+#   ... WHERE ...，需要 >= 3.8.0）、UPSERT（ON CONFLICT ... DO UPDATE，
+#   需要 >= 3.24.0）、遞迴 CTE（WITH RECURSIVE，需要 >= 3.8.3）。用系統版本
+#   編譯一樣不會在編譯當下報錯（_sqlite3 module 照樣建置成功），只會在真正
+#   執行到這些語法時（例如 /sessions 指令）才丟出
+#   "OperationalError: near "WHERE": syntax error" 這類看起來莫名其妙的錯誤。
+#   解法跟 OpenSSL 一樣：同一個最終路徑下先編一份新版 SQLite，讓 Python
+#   的 _sqlite3 extension 透過 CPPFLAGS/LDFLAGS 連到這份而不是系統那份。
+#
 # 用法（在有 Docker、能連網的機器上執行 — 不需要是 CentOS 7）：
-#   ./build-python-centos7.sh <輸出目錄> <python版本> <最終安裝絕對路徑前綴> <openssl版本>
+#   ./build-python-centos7.sh <輸出目錄> <python版本> <最終安裝絕對路徑前綴> <openssl版本> <sqlite版本> <sqlite年份>
 #
 # 範例：
-#   ./build-python-centos7.sh ./out 3.11.11 /mnt/shared/hermes-agent/releases/0.15.1/python 3.0.15
+#   ./build-python-centos7.sh ./out 3.11.11 /mnt/shared/hermes-agent/releases/0.15.1/python 3.0.15 3.53.4 2026
 #
-# 第三個參數非常重要：Python 跟 OpenSSL 編譯時的 --prefix 就是寫死的最終安裝
-# 路徑，之後在 CentOS 7 上「必須」解壓到完全相同的絕對路徑，否則標準函式庫、
-# site-packages、動態連結庫都會找不到。這個路徑要跟 config/paths.conf 的
-# HERMES_SHARE_ROOT 算出來的路徑一致。
+# 第三個參數非常重要：Python 跟 OpenSSL/SQLite 編譯時的 --prefix 就是寫死的
+# 最終安裝路徑，之後在 CentOS 7 上「必須」解壓到完全相同的絕對路徑，否則標準
+# 函式庫、site-packages、動態連結庫都會找不到。這個路徑要跟 config/paths.conf
+# 的 HERMES_SHARE_ROOT 算出來的路徑一致。
+#
+# SQLite 版本/年份要跟 https://www.sqlite.org/download.html 上公告的一致
+# （下載網址是 https://www.sqlite.org/<年份>/sqlite-autoconf-<版本去掉點>.tar.gz，
+# 年份是「該版本發佈的年份」，不是編譯當下的年份，之後版本升級時要一起確認更新）。
 # ============================================================================
 set -euo pipefail
 
-OUT_DIR="${1:?用法: $0 <輸出目錄> <python版本> <最終安裝絕對路徑前綴> <openssl版本>}"
+OUT_DIR="${1:?用法: $0 <輸出目錄> <python版本> <最終安裝絕對路徑前綴> <openssl版本> <sqlite版本> <sqlite年份>}"
 PY_VERSION="${2:?缺少 python 版本，例如 3.11.11}"
 FINAL_PREFIX="${3:?缺少最終安裝絕對路徑，例如 /mnt/shared/hermes-agent/releases/0.15.1/python}"
 OPENSSL_VERSION="${4:?缺少 OpenSSL 版本，例如 3.0.15}"
+SQLITE_VERSION="${5:?缺少 SQLite 版本，例如 3.53.4}"
+SQLITE_YEAR="${6:?缺少 SQLite 發佈年份，見 https://www.sqlite.org/download.html，例如 2026}"
 
 if ! command -v docker &> /dev/null; then
     echo "✗ 需要 Docker 才能在乾淨的 centos:7 環境裡編譯。請先安裝 Docker。" >&2
@@ -55,7 +72,7 @@ if command -v cygpath &> /dev/null; then
     export MSYS_NO_PATHCONV=1
 fi
 
-echo "→ 在 centos:7 容器內編譯 OpenSSL ${OPENSSL_VERSION} + Python ${PY_VERSION}"
+echo "→ 在 centos:7 容器內編譯 OpenSSL ${OPENSSL_VERSION} + SQLite ${SQLITE_VERSION} + Python ${PY_VERSION}"
 echo "  安裝前綴固定為 ${FINAL_PREFIX}"
 echo "  （這一步會下載 CentOS 7 相依套件、OpenSSL 與 Python 原始碼，需要網路，約需 15-25 分鐘）"
 
@@ -65,6 +82,8 @@ docker run --rm \
     -e PY_VERSION="$PY_VERSION" \
     -e FINAL_PREFIX="$FINAL_PREFIX" \
     -e OPENSSL_VERSION="$OPENSSL_VERSION" \
+    -e SQLITE_VERSION="$SQLITE_VERSION" \
+    -e SQLITE_YEAR="$SQLITE_YEAR" \
     centos:7 \
     bash -c '
         set -euo pipefail
@@ -77,11 +96,12 @@ docker run --rm \
 
         # perl / perl-IPC-Cmd：OpenSSL 的 Configure/config 腳本是 perl 寫的，
         # CentOS 7 預設的 perl 5.16 常常缺 IPC::Cmd 這個核心模組。
-        # 特意不裝 openssl-devel：我們要編自己的 OpenSSL，不用系統那份太舊的。
+        # 特意不裝 openssl-devel、也不裝 sqlite-devel：我們要編自己的版本，
+        # 不用系統那兩份太舊的（系統 sqlite-devel 是 3.7.17，見上面的說明）。
         yum install -y -q \
             gcc gcc-c++ make perl perl-IPC-Cmd \
             zlib-devel bzip2-devel ncurses-devel \
-            sqlite-devel readline-devel tk-devel gdbm-devel \
+            readline-devel tk-devel gdbm-devel \
             libffi-devel xz-devel libuuid-devel \
             wget tar
 
@@ -117,7 +137,26 @@ docker run --rm \
         "$FINAL_PREFIX/bin/openssl" version
 
         # ---------------------------------------------------------------
-        # Python：--with-openssl 指到上面剛裝好的私有 OpenSSL。
+        # SQLite：同樣裝到跟 Python 一樣的最終路徑下（見上面的說明：系統的
+        # 3.7.17 太舊，hermes-agent 的 session 資料庫用到的 partial index /
+        # UPSERT / 遞迴 CTE 都不支援）。sqlite-autoconf 的建置腳本會自動產生
+        # sqlite3.pc，跟 Python 共用同一個 lib/ 目錄與 rpath。
+        # ---------------------------------------------------------------
+        cd /tmp
+        SQLITE_AUTOCONF_VER="$(printf "%d%02d%02d00" $(echo "$SQLITE_VERSION" | tr "." " "))"
+        wget -q "https://www.sqlite.org/${SQLITE_YEAR}/sqlite-autoconf-${SQLITE_AUTOCONF_VER}.tar.gz"
+        tar xf "sqlite-autoconf-${SQLITE_AUTOCONF_VER}.tar.gz"
+        cd "sqlite-autoconf-${SQLITE_AUTOCONF_VER}"
+        ./configure --prefix="$FINAL_PREFIX" --disable-static
+        make -j"$(nproc)"
+        make install
+
+        "$FINAL_PREFIX/bin/sqlite3" --version
+
+        # ---------------------------------------------------------------
+        # Python：--with-openssl 指到上面剛裝好的私有 OpenSSL；CPPFLAGS/
+        # LDFLAGS 讓 _sqlite3 extension 連到上面剛裝好的私有 SQLite（配置階段
+        # 找不到系統的 sqlite3.h，因為我們特意沒裝 sqlite-devel，只會找到這份）。
         # ---------------------------------------------------------------
         cd /tmp
         wget -q "https://www.python.org/ftp/python/${PY_VERSION}/Python-${PY_VERSION}.tgz"
@@ -132,12 +171,17 @@ docker run --rm \
         # 10-20%，對這種以 LLM API 呼叫為主、CPU-bound 不多的 agent CLI
         # 影響可忽略，換取編譯穩定可重現。
         # --with-ensurepip=install：內建 pip，離線安裝 wheel 用得到。
+        # CPPFLAGS/LDFLAGS 的 -I/-L 指到私有 SQLite（見上面說明）；
+        # PKG_CONFIG_PATH 讓 configure 的 pkg-config 偵測也找得到同一份，
+        # 不會不小心 fallback 去抓系統版本（反正也沒裝，但求保險一致）。
+        export PKG_CONFIG_PATH="$FINAL_PREFIX/lib/pkgconfig"
         ./configure \
             --prefix="$FINAL_PREFIX" \
             --with-openssl="$FINAL_PREFIX" \
             --with-ensurepip=install \
             --enable-shared \
-            LDFLAGS="-Wl,-rpath=$FINAL_PREFIX/lib"
+            CPPFLAGS="-I$FINAL_PREFIX/include" \
+            LDFLAGS="-L$FINAL_PREFIX/lib -Wl,-rpath=$FINAL_PREFIX/lib"
 
         make -j"$(nproc)"
         make install
@@ -150,10 +194,15 @@ docker run --rm \
         ln -sf "pip${PY_MINOR}" "$FINAL_PREFIX/bin/pip3"
         ln -sf "pip${PY_MINOR}" "$FINAL_PREFIX/bin/pip"
 
-        echo "✓ 編譯完成，驗證（含 SSL）："
+        echo "✓ 編譯完成，驗證（含 SSL / SQLite）："
         "$FINAL_PREFIX/bin/python3" --version
         "$FINAL_PREFIX/bin/python3" -c "import ssl; print(\"OpenSSL:\", ssl.OPENSSL_VERSION)"
         "$FINAL_PREFIX/bin/python3" -c "import lzma, sqlite3, ctypes, curses; print(\"lzma/sqlite3/ctypes/curses OK\")"
+        "$FINAL_PREFIX/bin/python3" -c "import sqlite3; print(\"SQLite:\", sqlite3.sqlite_version)"
+        # 不只檢查版本號，直接跑一次 hermes-agent 實際會用到、CentOS 7 系統版
+        # SQLite (3.7.17) 會炸掉的語法（partial index / UPSERT / 遞迴 CTE），
+        # 確認真的修好了，而不是只是「看起來」是新版。
+        "$FINAL_PREFIX/bin/python3" -c "import sqlite3; conn = sqlite3.connect(\":memory:\"); conn.execute(\"CREATE TABLE t (id INTEGER PRIMARY KEY, active INTEGER)\"); conn.execute(\"CREATE INDEX idx ON t(active) WHERE active IS NULL\"); conn.execute(\"INSERT INTO t VALUES (1, 1) ON CONFLICT(id) DO UPDATE SET active = excluded.active\"); conn.execute(\"WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n < 3) SELECT * FROM c\"); print(\"partial index / UPSERT / WITH RECURSIVE all OK\")"
 
         # 打包成 tar.gz 再送出容器，不要把檔案原封不動 cp 到 /out。
         # 原因：/out 是 bind mount 到 Windows/NTFS 的路徑，NTFS 不記錄 Linux
